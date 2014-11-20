@@ -2,50 +2,78 @@
 <html>
 <head>
 <title>bcc</title>
+
 <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css">
+
 <!--
 <link rel="stylesheet" href="dist\css\bootstrap.min.css">
 -->
-<script type="text/javascript">
 
-var ws = new WebSocket("ws://192.168.178.42:48300");
-ws.onopen = function()
+<script type="text/javascript">
+var defaultServer = "192.168.178.42:48300";
+var ws;
+function connect(server)
 {
-    //connected
-};
-ws.onmessage = function (evt)
+	if(server == null || server == "")
+		server = defaultServer;
+	
+	ws = new WebSocket("ws://" + server);
+	
+	ws.onopen = onConnect;
+	ws.onmessage = onReseve;
+	ws.onclose = onDisonnect;
+
+	window.onbeforeunload = function()
+	{
+		ws.close();
+	}
+
+	ws.onerror = function(evt)
+	{
+		console.log("The following error occurred: " + evt.data);
+	}
+	
+	if(ws.readyState == 0)
+	{
+		setAlert("Connecting ... ", "info");
+		setDisabled(true);
+	}
+}
+
+function onConnect()
+{
+	setAlert("Connected", "success", true);
+	setDisabled(false);
+	window.setTimeout(resetAlert, 5000);
+}
+
+function sendMessage(nick, ip, msg)
+{
+    var frame = '{ "nick":"'+nick+'","ip":"'+ip+'","msg":"'+msg+'" }';
+    ws.send(frame);
+}
+
+function onReseve(evt)
 {
     var received_msg = evt.data;
     var jsonmsg = JSON.parse(received_msg);
     addMessage(jsonmsg.nick, jsonmsg.ip, jsonmsg.msg);
-};
-window.onbeforeunload = function()
-{
-    ws.close();
-}
-ws.onclose = function()
-{
-    //alert("Connection is closed...");
-};
-ws.onerror = function(evt)
-{
-    console.log("The following error occurred: " + evt.data);
 }
 
-function sendFrame(nick, ip, msg)
+function onDisonnect()
 {
-    var frame = '{ "nick":"'+nick+'","ip":"'+ip+'","msg":"'+msg+'" }';
-    ws.send(frame);
+	setAlert("<strong>Not Conectet !<strong> <a href=\"javascript:connect()\" class=\"alert-link\">try to connect<a>","danger");
+	setDisabled(true);
 }
 
 function toDateString(date)
 {
 	return date.toLocaleTimeString() + " " + date.toLocaleDateString();
 }
-
 function addMessage(nick, ip, mes)
 {
-	var ele = document.getElementById("showMssage");
+	var onButtom = document.body.scrollHeight - (window.pageYOffset + window.innerHeight) == 0;
+	
 	var htmlText = "";
 	htmlText += "<blockquote style=\"font-size:small;\" >";
 	htmlText += "<small>" ;
@@ -57,26 +85,60 @@ function addMessage(nick, ip, mes)
 	htmlText += "</small>";
 	htmlText += "<p>" + mes + "</p>";
 	htmlText += "</blockquote>";
-	ele.innerHTML += htmlText;
+	document.getElementById("showMssage").innerHTML += htmlText;
+	
+	if(onButtom)
+		window.scrollTo(window.pageXOffset,document.body.scrollHeight);
 }
-function addMyMessage()
+function butSendClick()
 {
-	if(document.getElementById("nick").value == "")
+	var error = false;
+	
+	if(document.getElementById("tbNick").value.trim() == "")
 	{
-		alert("no Nick");
-	}
-	else if(document.getElementById("message").value == "")
-	{
-		alert("no Message");
+		document.getElementById("divTbNick").className = "form-group has-error";
+		error = true;
 	}
 	else
+		document.getElementById("divTbNick").className = null;
+		
+	if(document.getElementById("taMessage").value.trim() == "")
 	{
-        sendFrame(document.getElementById("nick").value, "127.0.0.1666",document.getElementById("message").value);
-        
-        document.getElementById("message").value = "";
+		document.getElementById("divTaMessage").className = "form-group has-error";
+		error = true;
+	}
+	else
+		document.getElementById("divTaMessage").className = null;
+		
+	if (!error)
+	{
+		sendMessage(document.getElementById("tbNick").value, "0.0.0.1",document.getElementById("taMessage").value);
+		
+		document.getElementById("taMessage").value = "";
 	}
 }
-
+function setAlert(message,type,closeable)
+{   
+	
+    var htmlText = "";
+	htmlText += "<div class=\"alert alert-" + type + " alert-dismissible \" role=\"alert\">";
+	if(closeable)
+		htmlText += "<button type=\"button\" class=\"close\" data-dismiss=\"alert\" onclick=\"resetAlert();\" >&times</button>";
+	htmlText += message;
+	htmlText += "</div>";
+	document.getElementById("alert").innerHTML = htmlText;
+	
+}
+function resetAlert()
+{
+	document.getElementById("alert").innerHTML ="";
+}
+function setDisabled(disabled)
+{
+	document.getElementById("tbNick").readOnly = disabled;
+	document.getElementById("taMessage").readOnly = disabled;
+	document.getElementById("butSend").disabled  = disabled;
+}
 </script>
 </head>
 <body>
@@ -87,15 +149,19 @@ function addMyMessage()
 </div>
 <div id="pagebody" style="text-align:left;">
 <div id="showMssage" ></div>
-<div id="newMessage" style="width: 100%;">
-<pre>
+<div id="alert"></div>
+<div id="newMessage" style="width: 100%;" >
 <form>
-<input type="text" class="form-control" placeholder="nick" id="nick" style=" max-width: 100%; width: 200px; "  value="User666">
-<textarea class="form-control" rows="3" placeholder="message" style="width: 100%; "  id="message" >Test</textarea>
-<button type="button" onclick="addMyMessage();" class="btn btn-default">Send</button>
+<pre style="overflow: hidden;"><div id="divTbNick"  style="margin-bottom :0px;"><input type="text" class="form-control" placeholder="nick" id="tbNick" style=" max-width: 100%; width: 200px; " readOnly></div>
+<div id="divTaMessage" style="margin-bottom :0px; width:100%"><textarea class="form-control" rows="3" placeholder="message" style=" max-width: 100%; width: 100%; " id="taMessage" readOnly></textarea></div>
+<button type="button" onclick="butSendClick();" class="btn btn-default" id="butSend" disabled>Send</button></pre>
 </form>
-</pre>
 </div>
-<center>
+</div>
+</div>
+</center>
+<script type="text/javascript">
+connect();
+</script>
 </body>
 </html>

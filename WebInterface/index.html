@@ -1,0 +1,101 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<title>bcc</title>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css">
+<!--
+<link rel="stylesheet" href="dist\css\bootstrap.min.css">
+-->
+<script type="text/javascript">
+
+var ws = new WebSocket("ws://192.168.178.42:48300");
+ws.onopen = function()
+{
+    //connected
+};
+ws.onmessage = function (evt)
+{
+    var received_msg = evt.data;
+    var jsonmsg = JSON.parse(received_msg);
+    addMessage(jsonmsg.nick, jsonmsg.ip, jsonmsg.msg);
+};
+window.onbeforeunload = function()
+{
+    ws.close();
+}
+ws.onclose = function()
+{
+    //alert("Connection is closed...");
+};
+ws.onerror = function(evt)
+{
+    console.log("The following error occurred: " + evt.data);
+}
+
+function sendFrame(nick, ip, msg)
+{
+    var frame = '{ "nick":"'+nick+'","ip":"'+ip+'","msg":"'+msg+'" }';
+    ws.send(frame);
+}
+
+function toDateString(date)
+{
+	return date.toLocaleTimeString() + " " + date.toLocaleDateString();
+}
+
+function addMessage(nick, ip, mes)
+{
+	var ele = document.getElementById("showMssage");
+	var htmlText = "";
+	htmlText += "<blockquote style=\"font-size:small;\" >";
+	htmlText += "<small>" ;
+	htmlText += "<b>" + nick + "</b>";
+	htmlText += " - ";
+	htmlText += toDateString(new Date());
+	htmlText += " - ";
+	htmlText += "<i>"+ip+"</i>";
+	htmlText += "</small>";
+	htmlText += "<p>" + mes + "</p>";
+	htmlText += "</blockquote>";
+	ele.innerHTML += htmlText;
+}
+function addMyMessage()
+{
+	if(document.getElementById("nick").value == "")
+	{
+		alert("no Nick");
+	}
+	else if(document.getElementById("message").value == "")
+	{
+		alert("no Message");
+	}
+	else
+	{
+        sendFrame(document.getElementById("nick").value, "127.0.0.1666",document.getElementById("message").value);
+        
+        document.getElementById("message").value = "";
+	}
+}
+
+</script>
+</head>
+<body>
+<center>
+<div id="page" style="max-width: 600px; text-align:center;">
+<div id="pageheader" style="text-align:center;">
+<h1>bcc</h1><br>
+</div>
+<div id="pagebody" style="text-align:left;">
+<div id="showMssage" ></div>
+<div id="newMessage" style="width: 100%;">
+<pre>
+<form>
+<input type="text" class="form-control" placeholder="nick" id="nick" style=" max-width: 100%; width: 200px; "  value="User666">
+<textarea class="form-control" rows="3" placeholder="message" style="width: 100%; "  id="message" >Test</textarea>
+<button type="button" onclick="addMyMessage();" class="btn btn-default">Send</button>
+</form>
+</pre>
+</div>
+<center>
+</body>
+</html>

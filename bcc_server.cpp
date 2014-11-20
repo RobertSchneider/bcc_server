@@ -2,6 +2,8 @@
 #include <arpa/inet.h>
 #include <vector>
 #include <algorithm>
+#include <iostream>
+#include <sstream>
 
 #include <bcc/bcc.h>
 #include "sha1.h"
@@ -19,7 +21,8 @@ using namespace std;
 //globals
 string broadcastaddress = "192.168.0.255";
 int broadcastSockID;
-std::vector<int> clientSockets;
+vector<int> clientSockets;
+vector<string> clientIps;
 int numClientSockets = 0;
 struct sockaddr_in broadcastAddr;
 
@@ -75,8 +78,21 @@ void closeSocket(int socket)
     error("socket closed");
     //remove socket
     close(socket);
-    std::vector<int>::iterator position = std::find(clientSockets.begin(), clientSockets.end(), socket);
-    if (position != clientSockets.end()) clientSockets.erase(position);
+    vector<int>::iterator position = std::find(clientSockets.begin(), clientSockets.end(), socket);
+    if (position != clientSockets.end()) 
+    {
+        clientSockets.erase(position);
+        for(vector<string>::iterator it = clientIps.begin(); it != clientIps.end(); ++it) {
+            string st = *it;
+            std::size_t found = st.find(" ");
+            int s = atoi(st.substr(0, found).c_str());
+            if(s == socket)
+            {
+                clientIps.erase(it);
+                break;
+            }
+        }
+    }
     numClientSockets--;
 }
 
@@ -122,10 +138,15 @@ void* clientMain(void *arg)
             }
 
             //lookup ip
-            /*sockaddr_in cli_addr;
-            socklen_t len = sizeof(cli_addr);
-            getsockname(socket, (sockaddr*)&cli_addr, &len);
-            ip = inet_ntoa(cli_addr.sin_addr);*/
+            for(vector<string>::iterator it = clientIps.begin(); it != clientIps.end(); ++it) {
+                string st = *it;
+                std::size_t found = st.find(" ");
+                int s = atoi(st.substr(0, found).c_str());
+                if(s == socket)
+                {
+                    ip = st.substr(found+1);
+                }
+            }
 
             printf("nick:%s ip:%s msg:%s\n", nick.c_str(), ip.c_str(), msg.c_str());
             BccMessage bccmsg(nick.c_str(), ip.c_str(), msg.c_str());
@@ -183,6 +204,9 @@ int listenSocketServer(int argc, char *argv[])
         handshake(clientSock);
         
         clientSockets.push_back(clientSock);
+        std::ostringstream s;
+        s << clientSock;
+        clientIps.push_back(s.str().append(" ").append(inet_ntoa(cli_addr.sin_addr)));
         numClientSockets++;
         //new thread for every client
         pthread_t pth;

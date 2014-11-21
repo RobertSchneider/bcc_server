@@ -28,7 +28,7 @@ extern "C" void handshake(int sock)
     char hand_shake[HAND_LEN];
     memset((char *) &hand_shake, '\0', HAND_LEN);
     int len = read(sock,&hand_shake,HAND_LEN-1);
-    //got handshake
+    //got handshake6666
 
     string handshake_str(hand_shake);
     string clientKey = "Sec-WebSocket-Key: ";

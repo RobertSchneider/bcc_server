@@ -4,6 +4,9 @@
 #include <algorithm>
 #include <iostream>
 #include <sstream>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
 
 #include <bcc/bcc.h>
 #include "sha1.h"

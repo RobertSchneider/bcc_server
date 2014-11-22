@@ -2,50 +2,101 @@
 <html>
 <head>
 <title>bcc</title>
-<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css">
-<!--
-<link rel="stylesheet" href="dist\css\bootstrap.min.css">
--->
-<script type="text/javascript">
+<audio controls hidden=true id="audioNotification">
+  <source src="audio/notification.wav" type="audio/wav">
+  <source src="audio/notification.mp3" type="audio/mpeg">
+</audio>
 
-var ws = new WebSocket("ws://192.168.178.42:48300");
-ws.onopen = function()
+
+<link rel="stylesheet" href="css/bootstrap.min.css">
+
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<!--
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css">
+-->
+
+<script type="text/javascript">
+var localTest = false;
+var defaultServer = "127.0.0.1";
+var ws;
+
+window.onbeforeunload = onWindowColse;
+
+function connect(server)
 {
-    //connected
-};
-ws.onmessage = function (evt)
+	if(server != null && server != "")
+		defaultServer = server;
+	
+	if(ws != null)
+	{
+		ws.close();
+	}
+	ws = new WebSocket("ws://" + defaultServer +":48300");
+	
+	ws.onopen = onConnect;
+	ws.onmessage = onReseve;
+	ws.onclose = onDisonnect;
+
+	
+
+	ws.onerror = function(evt)
+	{
+		console.log("The following error occurred: " + evt.data);
+	}
+	
+	if(ws.readyState == 0)
+	{
+		setAlert("Connecting ... ", "info");
+		setDisabled(true);
+	}
+}
+
+function onWindowColse()
+{
+	//document.cookie = '{ "nick":"'+document.getElementById("tbNick").value+'" , "ip":"'+ defaultServer +'" }'; ;
+	ws.close();
+}
+
+function onConnect()
+{
+	setAlert("Connected", "success", true);
+	setDisabled(false);
+	window.setTimeout(resetAlert, 5000);
+}
+
+function sendMessage(nick, msg)
+{
+    msg = msg.replace(/</gi, "&lt");
+    msg = msg.replace(/>/gi, "&gt");
+    msg = msg.replace(/"/gi, "\\\"");
+
+    var frame = '{ "nick":"'+nick+'","msg":"'+msg+'" }';
+    ws.send(frame);
+}
+
+function onReseve(evt)
 {
     var received_msg = evt.data;
     var jsonmsg = JSON.parse(received_msg);
     addMessage(jsonmsg.nick, jsonmsg.ip, jsonmsg.msg);
-};
-window.onbeforeunload = function()
-{
-    ws.close();
-}
-ws.onclose = function()
-{
-    //alert("Connection is closed...");
-};
-ws.onerror = function(evt)
-{
-    console.log("The following error occurred: " + evt.data);
 }
 
-function sendFrame(nick, ip, msg)
+function onDisonnect()
 {
-    var frame = '{ "nick":"'+nick+'","ip":"'+ip+'","msg":"'+msg+'" }';
-    ws.send(frame);
+	setAlert("<strong>Not Conectet !<strong> <a href=\"javascript:connect()\" class=\"alert-link\">try to connect<a>","danger");
+	setDisabled(true);
 }
 
 function toDateString(date)
 {
 	return date.toLocaleTimeString() + " " + date.toLocaleDateString();
 }
-
 function addMessage(nick, ip, mes)
 {
-	var ele = document.getElementById("showMssage");
+	var onButtom = document.body.scrollHeight - (window.pageYOffset + window.innerHeight) == 0;
+	
 	var htmlText = "";
 	htmlText += "<blockquote style=\"font-size:small;\" >";
 	htmlText += "<small>" ;
@@ -55,47 +106,115 @@ function addMessage(nick, ip, mes)
 	htmlText += " - ";
 	htmlText += "<i>"+ip+"</i>";
 	htmlText += "</small>";
-	htmlText += "<p>" + mes + "</p>";
+	htmlText += "<p>" + mes.replace("\n", "<br>");  + "</p>";
 	htmlText += "</blockquote>";
-	ele.innerHTML += htmlText;
+	document.getElementById("showMssage").innerHTML += htmlText;
+	
+	if(onButtom)
+		window.scrollTo(window.pageXOffset,document.body.scrollHeight);
+	if(document.getElementById("cbAudio").checked)
+		document.getElementById('audioNotification').play();
 }
-function addMyMessage()
+function butSendClick()
 {
-	if(document.getElementById("nick").value == "")
+	var error = false;
+	
+	if(document.getElementById("tbNick").value.trim() == "")
 	{
-		alert("no Nick");
-	}
-	else if(document.getElementById("message").value == "")
-	{
-		alert("no Message");
+		document.getElementById("divTbNick").className = "form-group has-error";
+		if(!error)
+			document.getElementById("tbNick").focus();
+		error = true;
 	}
 	else
+		document.getElementById("divTbNick").className = null;
+		
+	if(document.getElementById("taMessage").value.trim() == "")
 	{
-        sendFrame(document.getElementById("nick").value, "127.0.0.1666",document.getElementById("message").value);
-        
-        document.getElementById("message").value = "";
+		document.getElementById("divTaMessage").className = "form-group has-error";
+		if(!error)
+			document.getElementById("taMessage").focus();
+		error = true;
+	}
+	else
+		document.getElementById("divTaMessage").className = null;
+		
+	if (!error)
+	{
+		if(localTest)
+			addMessage(document.getElementById("tbNick").value, "0.0.0.1",document.getElementById("taMessage").value);
+		else
+			sendMessage(document.getElementById("tbNick").value, document.getElementById("taMessage").value);
+			
+		document.getElementById("taMessage").value = "";
+		document.getElementById("taMessage").focus();
+	}
+}
+function taMessageOnKeyDown(e)
+{
+	if (e.keyCode == 13 && !e.shiftKey) { 
+		butSendClick();
+	}
+}
+function taMessageOnKeyUp(e)
+{
+	if ( e.keyCode == 13 && !e.shiftKey && document.getElementById("taMessage").value.trim() == "" ) { 
+		document.getElementById("taMessage").value = "";
 	}
 }
 
+function setAlert(message,type,closeable)
+{
+    var htmlText = "";
+	htmlText += "<div class=\"alert alert-" + type + " alert-dismissible \" role=\"alert\">";
+	if(closeable)
+		htmlText += "<button type=\"button\" class=\"close\" data-dismiss=\"alert\" onclick=\"resetAlert();\" >&times</button>";
+	htmlText += message;
+	htmlText += "</div>";
+	document.getElementById("alert").innerHTML = htmlText;
+	
+}
+function resetAlert()
+{
+	document.getElementById("alert").innerHTML ="";
+}
+function setDisabled(disabled)
+{
+	document.getElementById("tbNick").readOnly = disabled;
+	document.getElementById("taMessage").readOnly = disabled;
+	document.getElementById("butSend").disabled  = disabled;
+}
 </script>
 </head>
 <body>
 <center>
 <div id="page" style="max-width: 600px; text-align:center;">
+<div id="divOprtons" style="position:fixed; top:0px; right:0px"><input type="checkbox" id="cbAudio" style="text-align:right; " checked> Audio </input></div>
 <div id="pageheader" style="text-align:center;">
 <h1>bcc</h1><br>
 </div>
 <div id="pagebody" style="text-align:left;">
-<div id="showMssage" ></div>
-<div id="newMessage" style="width: 100%;">
-<pre>
+<div id="showMssage" style="text-align:left;"></div>
+<div id="alert"></div>
+<div id="newMessage" style="max-width:100%; width: 600px;" >
 <form>
-<input type="text" class="form-control" placeholder="nick" id="nick" style=" max-width: 100%; width: 200px; "  value="User666">
-<textarea class="form-control" rows="3" placeholder="message" style="width: 100%; "  id="message" >Test</textarea>
-<button type="button" onclick="addMyMessage();" class="btn btn-default">Send</button>
+<pre style="overflow: hidden; margin-bottom:0px;"><div id="divTbNick"  style="margin-bottom :0px;"><input type="text" class="form-control" placeholder="nick" id="tbNick" style=" width: 200px; " readOnly></div>
+<div id="divTaMessage" style="margin-bottom:0px; width:100%"><textarea class="form-control" rows="3" placeholder="message" onkeydown="taMessageOnKeyDown(event);" onkeyup="taMessageOnKeyUp(event);" style=" max-width: 100%; width: 100%; " id="taMessage" readOnly></textarea></div>
+<button type="button" onclick="butSendClick();" class="btn btn-default" id="butSend" disabled>Send</button></pre>
 </form>
-</pre>
 </div>
-<center>
+</div>
+</div>
+</center>
+<script type="text/javascript">
+/*
+if(document.cookie != null && document.cookie.trim() != "" && JSON.parse(document.cookie).nick != null)
+document.getElementById("tbNick").value = JSON.parse(document.cookie).nick;
+*/
+if(localTest)
+	onConnect();
+else
+	connect();
+</script>
 </body>
 </html>

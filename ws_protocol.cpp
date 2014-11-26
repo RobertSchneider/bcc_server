@@ -62,10 +62,9 @@ extern "C" void handshake(int sock)
 
         memset((char *) &hand_shake, '\0', HAND_LEN);
         int len2 = read(sock, &hand_shake, HAND_LEN-1);
-        if(len2 > 0) printf("handshake successfull\n");
+        if(len2 > 0) {}
         else 
         {
-            printf("handshake failed\n");
             closeSocket(sock);
         }
     }else 

@@ -8,7 +8,7 @@ make
 make install
 cd ..
 
-git clone -b development https://github.com/OSpringer/bcc-library/
+git clone https://github.com/OSpringer/bcc-library/
 cd bcc-library
 mv /usr/local/include/json-c /usr/local/include/json
 make

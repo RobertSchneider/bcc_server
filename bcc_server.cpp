@@ -7,6 +7,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <time.h>
+#include <string>
 
 #include <bcc/bcc.h>
 #include "sha1.h"
@@ -18,8 +20,8 @@ using namespace std;
 
 #define CLIENTPORT 48300
 #define BROADPORT 6666
-#define MAXBUFLEN 51200
-#define MAXCLIENTS 10
+#define MAXBUFLEN 5120
+#define MAXCLIENTS 30
 
 //globals
 string broadcastaddress = "192.168.0.255";
@@ -36,6 +38,13 @@ void error(string msg)
     perror(&msg[0]);
     //exit(1);
 }
+void log(string str)
+{
+    time_t timev;
+    time(&timev);
+    tm *t = localtime(&timev);
+    printf("[%02d.%02d.%d %02d:%02d:%02d]\t%s\n", t->tm_mday, t->tm_mon+1, t->tm_year+1900, t->tm_hour, t->tm_min, t->tm_sec, str.c_str());
+}
 
 int main(int argc, char *argv[])
 {
@@ -51,7 +60,6 @@ int main(int argc, char *argv[])
     listenSocketServer(argc, argv);
     return 1;
 }
-
 
 string packFrame(string msg)
 {
@@ -78,7 +86,6 @@ void writeFrame(int sock, string s)
 
 void closeSocket(int socket)
 {
-    error("socket closed");
     //remove socket
     close(socket);
     vector<int>::iterator position = std::find(clientSockets.begin(), clientSockets.end(), socket);
@@ -91,6 +98,7 @@ void closeSocket(int socket)
             int s = atoi(st.substr(0, found).c_str());
             if(s == socket)
             {
+                log(string(*it) + string(" closed"));
                 clientIps.erase(it);
                 break;
             }
@@ -110,20 +118,22 @@ void* clientMain(void *arg)
         memset((char *) &buffer, '\0', MAXBUFLEN);
         n = read(socket,&buffer,MAXBUFLEN-1);
 
-        if(n == 0 || (int)(buffer[0] & 0x0F) == 8 || (int)(buffer[0] & 0x0F) == 0)
+        if(n == 0 || (int)(buffer[0] & 0x0F) == 0)
         {
             closeSocket(socket);
             break;
         }
-        if((int)(buffer[0] & 0x0F) == 1)
+        int opcode = (int)(buffer[0] & 0x0F);
+        //text
+        if(opcode == 1)
         {
             uint8_t *outBuffer = parse((const uint8_t*)buffer, n);
             if(outBuffer == NULL) 
             {
-                printf("nothing to read\n");
+                log("ERROR reading / parsing frame failed");
                 continue;
             };
-            if (n < 0) error("ERROR reading from socket");
+            if (n < 0) log("ERROR reading socket failed");
             string nick;
             string ip;
             string msg;
@@ -151,19 +161,36 @@ void* clientMain(void *arg)
                 }
             }
 
-            printf("nick:%s ip:%s msg:%s\n", nick.c_str(), ip.c_str(), msg.c_str());
+            string logS = string("nick:")+nick+string(" ip:")+ip+string(" msg:")+msg;
+            log(logS);
             BccMessage bccmsg(nick.c_str(), ip.c_str(), msg.c_str());
             broadcastMsg(bccmsg.encodeMessage());
 
             free(outBuffer);
-        }else if((int)(buffer[0] & 0x0F) == 10)
+        }else if(opcode == 10)
         {
             //pong!
-            printf("PONG! client alive...\n");
+            log("PONG! received");
+        }else if(opcode == 9)
+        {
+            //ping!
+            log("PING! received");
+            string pckt = packFrame("PING");
+            pckt[0] = (char)0b10001001;
+            write(socket, pckt.c_str(), pckt.length());
+        }else if(opcode == 8)
+        {
+            //close
+            write(socket, buffer, (size_t)n);
+            closeSocket(socket);
+            break;
         }else 
         {
             //wtf is thaat?
-            printf("opcode not handled %d\n", (int)(buffer[0] & 0x0F));
+            std::ostringstream ss;
+            ss << "opcode not handled ";
+            ss << opcode;
+            log(ss.str());
         }
     }
     return NULL;
@@ -178,7 +205,7 @@ int listenSocketServer(int argc, char *argv[])
 
     //init socket
     serverSock = socket(AF_INET, SOCK_STREAM, 0);
-    if (serverSock < 0) error("ERROR socket creation failed");
+    if (serverSock < 0) log("ERROR socket creation failed");
     memset((char *) &serv_addr, '\0', sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
@@ -186,8 +213,8 @@ int listenSocketServer(int argc, char *argv[])
 
     //bind and listen
     int reuse = -1;
-    if (setsockopt(serverSock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(int)) < 0) error("ERROR port reusing failed");
-    if (bind(serverSock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)  error("ERROR socket binding failed");
+    if (setsockopt(serverSock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(int)) < 0) log("ERROR port reusing failed");
+    if (bind(serverSock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)  log("ERROR socket binding failed");
     listen(serverSock,5);
     socklen_t clilen = sizeof(cli_addr);
 
@@ -198,10 +225,13 @@ int listenSocketServer(int argc, char *argv[])
         if(numClientSockets >= MAXCLIENTS) continue;
         if (clientSock < 0)  
         {
-            error("ERROR accepting new socket failed");
+            log("ERROR accepting new socket failed");
             continue;
         }
-        printf("new socket connected %d %s\n", clientSock, inet_ntoa(cli_addr.sin_addr));
+        std::ostringstream ss;
+        ss << "new socket connected ";
+        ss << inet_ntoa(cli_addr.sin_addr);
+        log(ss.str());
 
         //handshake
         handshake(clientSock);
@@ -225,11 +255,11 @@ void initBroadcastSocket(void)
 {
     //create socket to send to broadcastadd
     broadcastSockID = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (broadcastSockID < 0) error("ERROR broadcastsocket creation failed");
+    if (broadcastSockID < 0) log("ERROR broadcastsocket creation failed");
 
     int broadcastEnable=1;
     if(setsockopt(broadcastSockID, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable))) 
-        error("ERROR broadcastsocket creation failed");
+        log("ERROR broadcastsocket creation failed");
 
     memset(&broadcastAddr, 0, sizeof broadcastAddr);
     broadcastAddr.sin_family = AF_INET;
@@ -241,7 +271,7 @@ void broadcastMsg(string msg)
 {
     //send broadcast msg
     int ret = sendto(broadcastSockID, &msg[0], strlen(&msg[0]), 0, (struct sockaddr*)&broadcastAddr, sizeof broadcastAddr);
-    if (ret < 0) error("ERROR sending broadcast");
+    if (ret < 0) log("ERROR sending broadcast");
 }
 
 void* listenBroadcast(void* argc)
@@ -254,7 +284,7 @@ void* listenBroadcast(void* argc)
     int numbytes;
     char buffer[MAXBUFLEN+1];
 
-    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) error("ERROR creating broadcast socket");
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) log("ERROR creating broadcast socket");
 
     my_addr.sin_family = AF_INET;
     my_addr.sin_addr.s_addr = INADDR_ANY;
@@ -262,14 +292,13 @@ void* listenBroadcast(void* argc)
     memset(&(my_addr.sin_zero), '\0', 8);
 
     if (bind(sockfd, (struct sockaddr *)&my_addr, sizeof(struct sockaddr)) < 0) 
-        error("ERROR binding broadcast socket");
+        log("ERROR binding broadcast socket");
 
     addr_len = sizeof(struct sockaddr);
     while(1)
     {
         if ((numbytes = recvfrom(sockfd, buffer, MAXBUFLEN-1 , 0, (struct sockaddr *)&their_addr, &addr_len)) < 0) 
-            error("ERROR receiving broadcast");
-        printf("broadcast to %d\n", (int)clientSockets.size());
+            log("ERROR receiving broadcast");
         //recreate packet from buffer
         //inform every client
         std:string str(buffer);

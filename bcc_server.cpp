@@ -10,6 +10,12 @@
 #include <time.h>
 #include <string>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <syslog.h>
+#include <string.h>
+
 #include <bcc/bcc.h>
 #include "sha1.h"
 #include "base64.h"
@@ -24,7 +30,7 @@ using namespace std;
 #define MAXCLIENTS 30
 
 //globals
-string broadcastaddress = "192.168.0.255";
+string broadcastaddress = "192.168.1.255";
 int broadcastSockID;
 vector<int> clientSockets;
 vector<string> clientIps;
@@ -43,13 +49,24 @@ void log(string str)
     time_t timev;
     time(&timev);
     tm *t = localtime(&timev);
-    printf("[%02d.%02d.%d %02d:%02d:%02d]\t%s\n", t->tm_mday, t->tm_mon+1, t->tm_year+1900, t->tm_hour, t->tm_min, t->tm_sec, str.c_str());
+    //printf("[%02d.%02d.%d %02d:%02d:%02d]\t%s\n", t->tm_mday, t->tm_mon+1, t->tm_year+1900, t->tm_hour, t->tm_min, t->tm_sec, str.c_str());
 }
 
 int main(int argc, char *argv[])
 {
-    broadcastaddress = argv[1];
+    if(argc >= 2) broadcastaddress = argv[1];
     
+    //daemon
+    pid_t pid, sid;
+    pid = fork();
+    if (pid != 0) {
+        exit(EXIT_FAILURE);
+    }
+    sid = setsid();
+    if (sid < 0) {
+        exit(EXIT_FAILURE);
+    }
+
     //listening broadcasts in new thread
     pthread_t pth;
     pthread_create(&pth,NULL, listenBroadcast, NULL);

@@ -12,19 +12,18 @@ After the handshake it will send every incomming chat-message to the given broad
 For example:
 
 ```
-./bcc_server 192.168.0.255
+bcc_server 192.168.0.255
 ```
 
 This is still in development and there is probably some inefficient code somewhere... .<br>
+Feel free to criticise, report bugs or to improve.
 Todo:
 --------------
-- Better error handling
-- Config file? (or parameters like 'MAX_CLIENTS' etc.)
-- Cross-compile for OpenWrt
 - Method descriptions
 - Testing
 
 Dependencies
 --------------
-- <a href="https://github.com/OSpringer/bcc-library">Bcc-Library</a>
+- <a href="https://github.com/RobertSchneider/bcc-library">Bcc-Library</a>
+  - <a href="https://github.com/OSpringer/bcc-library">(C++) Bcc-Library</a>
 - <a href="https://github.com/json-c/json-c">json-c</a>

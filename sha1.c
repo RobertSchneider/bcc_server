@@ -34,12 +34,9 @@
 
 #include "sha1.h"
 
-namespace sha1
-{
-    namespace // local
-    {
+    
         // Rotate an integer value to left.
-        inline const unsigned int rol(const unsigned int value,
+        const unsigned int rol(const unsigned int value,
                 const unsigned int steps)
         {
             return ((value << steps) | (value >> (32 - steps)));
@@ -47,7 +44,7 @@ namespace sha1
 
         // Sets the first 16 integers in the buffert to zero.
         // Used for clearing the W buffert.
-        inline void clearWBuffert(unsigned int* buffert)
+        void clearWBuffert(unsigned int* buffert)
         {
             for (int pos = 16; --pos >= 0;)
             {
@@ -113,7 +110,6 @@ namespace sha1
             result[3] += d;
             result[4] += e;
         }
-    } // namespace
 
     void calc(const void* src, const int bytelength, unsigned char* hash)
     {
@@ -182,4 +178,3 @@ namespace sha1
         }
         hexstring[40] = 0;
     }
-} // namespace sha1

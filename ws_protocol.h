@@ -4,6 +4,6 @@
 //parse frames
 //perform handshake 
 
-extern "C" void handshake(int sock);
-uint8_t* parse(const uint8_t *dataI, int length);
+void handshake(int sock);
+uint8_t* parse(const uint8_t *dataI, int length, int *len2);
 #endif

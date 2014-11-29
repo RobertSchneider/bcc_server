@@ -3,29 +3,28 @@
 #include <pthread.h>
 #include <netinet/in.h>
 #include <stdlib.h>
-#include <algorithm>
-#include <iostream>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 #include "sha1.h"
 #include "base64.h"
 #include "bcc_server.h"
 
-using namespace std;
-
 #define GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
-string getHandshake_Response(char *key, int len)
+char* getHandshake_Response(char *key, int len)
 {
-    string response = string('\0'+"HTTP/1.1 101 Switching Protocols\r\n") +
-        string("Upgrade: websocket\r\n") +
-        string("Connection: Upgrade\r\n") +
-        string("Sec-WebSocket-Accept: ")+ string(key).substr(0, len) + string("\r\n");
+    const char *resp = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ";
+    char *response = malloc(strlen(resp)+len+4+1);
+    strncpy(response, resp, strlen(resp));
+    strncpy(response+strlen(resp), key, len);
+    strcpy(response+strlen(resp)+len, "\r\n\r\n");
+    response[strlen(resp)+len+4] = '\0';
     return response;
 }
-extern "C" void handshake(int sock)
+void handshake(int sock)
 {
     int HAND_LEN = 500;
     char hand_shake[HAND_LEN];
@@ -33,32 +32,31 @@ extern "C" void handshake(int sock)
     int len = read(sock,&hand_shake,HAND_LEN-1);
     //got handshake6666
 
-    string handshake_str(hand_shake);
-    string clientKey = "Sec-WebSocket-Key: ";
-    std::size_t found = handshake_str.find(clientKey);
-    if (found != string::npos)
+    const char *clientKey = "Sec-WebSocket-Key: ";
+    char *found = strstr(hand_shake, clientKey); 
+    if (found != NULL)
     {
-        string key = handshake_str.substr((int)found);
-        key = key.substr(clientKey.length(), key.find('\n')-1-clientKey.length());
-        key.erase(remove(key.begin(), key.end(), '\n'), key.end());
-        key.erase(remove(key.begin(), key.end(), '\r'), key.end());
-        string guid = GUID;
-        string toSha = key + guid;
+        char key[24+strlen(GUID)+1];
+        memcpy(key, hand_shake+(found-hand_shake)+strlen(clientKey), 24);
+        strcpy(key+24, GUID);
+        key[24+strlen(GUID)] = '\0';
 
         //sha
         unsigned char sha[20];
-        sha1::calc(toSha.c_str(), toSha.length(), sha);
+        calc(key, strlen(key), sha);
         size_t len = 0;
         char *sha64 = base64_encode(sha, 20, &len);
-        string answer = getHandshake_Response((char*)sha64, len);
+        char *answer = getHandshake_Response((char*)sha64, len);
         free(sha64);
-        answer.append("\r\n");
-        write(sock, answer.c_str(), answer.length());
+        write(sock, answer, strlen(answer));
+
+        free(answer);
 
         //testing... ping
-        string pckt = packFrame("PING");
+        char *pckt = packFrame("PING");
         pckt[0] = (char)0b10001001;
-        write(sock, pckt.c_str(), pckt.length());
+        write(sock, pckt, strlen(pckt));
+        free(pckt);
 
         memset((char *) &hand_shake, '\0', HAND_LEN);
         int len2 = read(sock, &hand_shake, HAND_LEN-1);
@@ -85,7 +83,7 @@ static uint64_t read_be_uint_n(const uint8_t buf[], size_t nbytes)
     return val;
 }
 
-uint8_t* parse(const uint8_t *dataI, int length)
+uint8_t* parse(const uint8_t *dataI, int length, int *len2)
 {
     const uint8_t *v = dataI;
     size_t size = (size_t)length;
@@ -125,14 +123,17 @@ uint8_t* parse(const uint8_t *dataI, int length)
         memcpy(key, v + pos, sizeof(key));
         pos += 4;
 
-        data = (uint8_t*)malloc(len);
+        data = (uint8_t*)malloc(len+1);
         for (uint64_t i = 0; i < len; i++)
             data[i] = v[pos + i] ^ key[i % 4];
+        data[len] = '\0';
     } else {
         if (size < (pos + len)) return NULL;
 
-        data = (uint8_t*)malloc(len);
-        memcpy(data, v + pos, len);
+        data = (uint8_t*)malloc(len+1);
+        memcpy(data, v + pos, len); 
+        data[len] = '\0';
     }
+    *len2 = len;
     return data;
 }

@@ -1,14 +1,18 @@
 #ifndef BCC_SERVER_H
 #define BCC_SERVER_H
 
-#include <iostream>
+struct BCC_User
+{
+	char ip[40];
+	int socket;
+	struct BCC_User *next;
+};
 
-using namespace std;
-string packFrame(string msg);
+char *packFrame(char *msg);
 void closeSocket(int socket);
 
 //methods
-void error(string msg);
+void error(char *msg);
 
 //MAIN
 int listenSocketServer(int argc, char *argv[]);
@@ -16,7 +20,7 @@ void* clientMain(void *arg);
 
 //BROADCAST
 void initBroadcastSocket(void);
-void broadcastMsg(string msg);
+void broadcastMsg(char *msg);
 void* listenBroadcast(void* argc);
 
 #endif

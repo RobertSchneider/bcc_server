@@ -47,7 +47,7 @@ int main(int argc, char *argv[])
     if(argc >= 2) broadcastaddress = argv[1];
     
     //daemon
-    /*pid_t pid, sid;
+    pid_t pid, sid;
     pid = fork();
     if (pid != 0) {
         exit(EXIT_FAILURE);
@@ -55,7 +55,7 @@ int main(int argc, char *argv[])
     sid = setsid();
     if (sid < 0) {
         exit(EXIT_FAILURE);
-    }*/
+    }
 
     //listening broadcasts in new thread
     pthread_t pth;
